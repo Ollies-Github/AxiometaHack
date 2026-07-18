@@ -25,3 +25,6 @@ export type HatToPhoneMessage =
   | { type: 'hat.ready'; payload: { name: string; firmware: string } }
   | { type: 'encoder'; payload: { delta: -1 | 1; pressed: boolean } }
   | { type: 'telemetry'; payload: { batteryPercent?: number; rssi?: number } };
+
+export * from './messages';
+export * from './codec';
