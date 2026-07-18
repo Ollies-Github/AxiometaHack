@@ -69,8 +69,20 @@ void appsMessage(const char* json) {
 void appsTick() { if (g_active && g_active->render) g_active->render(); }
 const char* appsActiveId() { return g_active ? g_active->id : "launcher"; }
 void appsRenderCatalogJson(char* out, size_t n) {
-  size_t k = 0; k += snprintf(out + k, n - k, "[");
-  for (int i = 0; i < REG_N; i++)
-    k += snprintf(out + k, n - k, "%s{\"id\":\"%s\",\"name\":\"%s\"}", i ? "," : "", REG[i]->id, REG[i]->name);
-  snprintf(out + k, n - k, "]");
+  if (n == 0) return;
+  size_t k = 0;
+  int w = snprintf(out + k, n - k, "[");
+  if (w < 0) { out[n ? n - 1 : 0] = 0; return; }
+  if ((size_t)w >= n - k) { out[n - 1] = 0; return; }
+  k += (size_t)w;
+  for (int i = 0; i < REG_N; i++) {
+    w = snprintf(out + k, n - k, "%s{\"id\":\"%s\",\"name\":\"%s\"}", i ? "," : "", REG[i]->id, REG[i]->name);
+    if (w < 0) { out[n ? n - 1 : 0] = 0; return; }
+    if ((size_t)w >= n - k) { out[n - 1] = 0; return; }
+    k += (size_t)w;
+  }
+  w = snprintf(out + k, n - k, "]");
+  if (w < 0) { out[n ? n - 1 : 0] = 0; return; }
+  if ((size_t)w >= n - k) { out[n - 1] = 0; return; }
+  k += (size_t)w;
 }
