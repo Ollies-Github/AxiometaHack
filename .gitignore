@@ -22,3 +22,6 @@ build/
 *.raw
 *.flac
 *.aac
+
+# device wifi credentials (local only)
+firmware/arduino/hatos/wifi_secrets.h

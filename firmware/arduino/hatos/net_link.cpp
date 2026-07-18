@@ -4,6 +4,10 @@
 #include "net_link.h"
 #include "ble_link.h"
 #include "control_page.h"
+#include "display.h"
+#if __has_include("wifi_secrets.h")
+#include "wifi_secrets.h"
+#endif
 
 static WebSocketsServer ws(81);
 static WebServer http(80);              // serves the control page
@@ -20,11 +24,34 @@ static void onWsEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t len) 
 
 void netBegin(void (*onMessage)(const char* json)) {
   g_onMsg = onMessage;
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP("HatOS", "hatos1234");            // SSID, WPA2 password (>=8 chars)
-  IPAddress ip = WiFi.softAPIP();
-  Serial.printf("SoftAP up: SSID=HatOS pass=hatos1234  http://%s/  ws://%s:81\n",
-                ip.toString().c_str(), ip.toString().c_str());
+  IPAddress ip;
+#ifdef WIFI_SSID
+  // Station mode: join a real WiFi (needed for internet-backed apps like Spotify).
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.printf("WiFi: joining \"%s\" ", WIFI_SSID);
+  uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 15000) { delay(250); Serial.print("."); }
+  Serial.println();
+  if (WiFi.status() == WL_CONNECTED) {
+    ip = WiFi.localIP();
+    Serial.printf("WiFi OK: joined \"%s\"  http://%s/  ws://%s:81\n",
+                  WIFI_SSID, ip.toString().c_str(), ip.toString().c_str());
+    String ips = ip.toString();
+    const char* lines[] = {"WiFi OK", ips.c_str()};
+    displayLines(lines, 2);
+    delay(1800);
+  } else {
+    Serial.println("WiFi FAILED -> SoftAP fallback");
+  }
+#endif
+  if (WiFi.status() != WL_CONNECTED) {
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP("HatOS", "hatos1234");
+    ip = WiFi.softAPIP();
+    Serial.printf("SoftAP up: SSID=HatOS pass=hatos1234  http://%s/  ws://%s:81\n",
+                  ip.toString().c_str(), ip.toString().c_str());
+  }
   ws.begin();
   ws.onEvent(onWsEvent);
   http.on("/", []() { http.send(200, "text/html", CONTROL_HTML); });
