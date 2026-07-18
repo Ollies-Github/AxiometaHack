@@ -154,9 +154,15 @@ static void musicTick() {  // smooth, partial: advance marquee + interpolated pr
 // the Mac bridge over the binary WebSocket channel; redraw immediately if
 // the music app is currently on screen.
 void musicSetArt(const uint8_t* d, size_t len) {
-  Serial.printf("art rx: %u bytes\n", (unsigned)len);
   if (len != 64*64*2) return;
-  for (int i = 0; i < 64*64; i++) g_art[i] = ((uint16_t)d[2*i] << 8) | d[2*i+1];
+  // This panel renders drawRGBBitmap pixels inverted and with R/B swapped
+  // (verified on hardware with a colour test pattern), so correct each RGB565
+  // pixel here: invert all bits, then swap the 5-bit red/blue fields.
+  for (int i = 0; i < 64*64; i++) {
+    uint16_t v = ~(((uint16_t)d[2*i] << 8) | d[2*i+1]);
+    uint16_t r = (v >> 11) & 0x1F, g = (v >> 5) & 0x3F, b = v & 0x1F;
+    g_art[i] = (uint16_t)((b << 11) | (g << 5) | r);
+  }
   g_hasArt = true;
   if (g_active == &musicApp) displayMusicArt(g_art, true);
 }
