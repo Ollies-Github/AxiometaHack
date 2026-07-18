@@ -28,4 +28,22 @@ describe('codec', () => {
     const buf = new Uint8Array([...a, ...b, ...partial]);
     expect(dec.push(buf)).toEqual([{ type: 'ping' }, { type: 'pong' }]);
   });
+
+  it('reassembles a multi-byte UTF-8 character split across small chunks', () => {
+    const dec = new MessageDecoder();
+    const original = { type: 'note', payload: { text: 'café 🎉' } };
+    const full = encodeMessage(original);
+    const chunks = chunkForMtu(full, 3);
+    const out = chunks.flatMap((c) => dec.push(c));
+    expect(out).toEqual([original]);
+  });
+
+  it('skips a malformed line but keeps the valid messages around it', () => {
+    const dec = new MessageDecoder();
+    const a = encodeMessage({ type: 'a' });
+    const b = encodeMessage({ type: 'b' });
+    const garbage = new TextEncoder().encode('not json at all\n');
+    const buf = new Uint8Array([...a, ...garbage, ...b]);
+    expect(dec.push(buf)).toEqual([{ type: 'a' }, { type: 'b' }]);
+  });
 });
