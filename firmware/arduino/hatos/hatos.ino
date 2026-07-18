@@ -2,15 +2,18 @@
 #include "encoder.h"
 #include "line_framer.h"
 #include "ble_link.h"
-
-static int counter = 0;
+#include "apps.h"
 
 static void onPhoneMessage(const char* json) {
   Serial.printf("rx: %s\n", json);
   // Echo: reply hat.ready to a ping so we can confirm bidirectional flow.
   if (strstr(json, "\"ping\"")) {
     bleSend("{\"type\":\"pong\"}");
+    return;
   }
+  appsMessage(json);
+  char msg[48]; snprintf(msg, sizeof(msg), "{\"type\":\"app.changed\",\"payload\":{\"id\":\"%s\"}}", appsActiveId());
+  bleSend(msg);
 }
 
 static int g_selfTestLines = 0;
@@ -53,26 +56,39 @@ void setup() {
   displayBegin();
   encoderBegin();
   bleBegin(onPhoneMessage);
+  appsBegin();
   const char* boot[] = {"HatOS", "ready"};
   displayLines(boot, 2);
   runFramerSelfTest();
   runOverflowSelfTest();
 }
 
+static bool g_wasConnected = false;
+
 void loop() {
-  int d = encoderTakeDelta();
-  bool p = encoderTakePress();
-  if (d != 0 || p) {
-    if (p) counter = 0; else counter += d;
-    Serial.printf("delta=%d press=%d counter=%d\n", d, p, counter);
-    char line0[24]; snprintf(line0, sizeof(line0), "count %d", counter);
-    const char* lines[] = {"encoder", line0};
-    displayLines(lines, 2);
-    char msg[64];
-    snprintf(msg, sizeof(msg), "{\"type\":\"encoder\",\"payload\":{\"delta\":%d,\"pressed\":%s}}",
-             d, p ? "true" : "false");
+  // hat.ready on new connection
+  bool c = bleConnected();
+  if (c && !g_wasConnected) {
+    char cat[192]; appsRenderCatalogJson(cat, sizeof(cat));
+    char msg[256];
+    snprintf(msg, sizeof(msg),
+      "{\"type\":\"hat.ready\",\"payload\":{\"name\":\"HatOS\",\"firmware\":\"foundation-0.1\",\"apps\":%s}}", cat);
     bleSend(msg);
-    Serial.printf("tx: %s\n", msg);
+  }
+  g_wasConnected = c;
+
+  int d = encoderTakeDelta();
+  if (d != 0) {
+    appsEncoder(d);
+    char msg[64];
+    snprintf(msg, sizeof(msg), "{\"type\":\"encoder\",\"payload\":{\"delta\":%d,\"pressed\":false}}", d);
+    bleSend(msg);
+  }
+  if (encoderTakePress()) {
+    appsButton();
+    bleSend("{\"type\":\"encoder\",\"payload\":{\"delta\":0,\"pressed\":true}}");
+    char msg[48]; snprintf(msg, sizeof(msg), "{\"type\":\"app.changed\",\"payload\":{\"id\":\"%s\"}}", appsActiveId());
+    bleSend(msg);
   }
   delay(5);
 }
