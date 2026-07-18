@@ -63,19 +63,20 @@ void setup() {
   runOverflowSelfTest();
 }
 
-static bool g_wasConnected = false;
+static bool g_wasSubscribed = false;
 
 void loop() {
-  // hat.ready on new connection
-  bool c = bleConnected();
-  if (c && !g_wasConnected) {
+  // hat.ready on subscribe (CCCD enabled), not on connect: sending before the
+  // central subscribes to notifications gets silently dropped.
+  bool sub = bleSubscribed();
+  if (sub && !g_wasSubscribed) {
     char cat[192]; appsRenderCatalogJson(cat, sizeof(cat));
     char msg[256];
     snprintf(msg, sizeof(msg),
       "{\"type\":\"hat.ready\",\"payload\":{\"name\":\"HatOS\",\"firmware\":\"foundation-0.1\",\"apps\":%s}}", cat);
     bleSend(msg);
   }
-  g_wasConnected = c;
+  g_wasSubscribed = bleSubscribed();
 
   int d = encoderTakeDelta();
   if (d != 0) {
@@ -90,5 +91,7 @@ void loop() {
     char msg[48]; snprintf(msg, sizeof(msg), "{\"type\":\"app.changed\",\"payload\":{\"id\":\"%s\"}}", appsActiveId());
     bleSend(msg);
   }
+
+  bleFlush();
   delay(5);
 }
