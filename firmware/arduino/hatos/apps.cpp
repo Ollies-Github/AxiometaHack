@@ -97,6 +97,7 @@ static void musicButton() {
   musicRender();
   bleSend("{\"type\":\"music.command\",\"payload\":{\"action\":\"playpause\"}}");
 }
+static void musicDouble() { bleSend("{\"type\":\"music.command\",\"payload\":{\"action\":\"next\"}}"); }
 static void musicMessage(const char* json) {
   if (!strstr(json, "\"music.state\"")) return;
   jsonStr(json, "title", g_mTitle, sizeof(g_mTitle));
@@ -109,16 +110,18 @@ static void musicMessage(const char* json) {
 }
 
 void appsBegin() {
-  launcher   = {"launcher", "Home",    nullptr, launcherEncoder, launcherButton, nullptr, launcherRender};
-  counterApp = {"counter",  "Counter", nullptr, counterEncoder,  nullptr,        nullptr, counterRender};
-  textApp    = {"notes",    "Notes",   nullptr, nullptr,         nullptr,        textMessage, textRender};
-  musicApp   = {"music",    "Music",   musicEnter, musicEncoder, musicButton,    musicMessage, musicRender};
+  launcher   = {"launcher", "Home",    nullptr, launcherEncoder, launcherButton, nullptr, launcherRender, nullptr};
+  counterApp = {"counter",  "Counter", nullptr, counterEncoder,  nullptr,        nullptr, counterRender, nullptr};
+  textApp    = {"notes",    "Notes",   nullptr, nullptr,         nullptr,        textMessage, textRender, nullptr};
+  musicApp   = {"music",    "Music",   musicEnter, musicEncoder, musicButton,    musicMessage, musicRender, musicDouble};
   activate(&launcher);
 }
 
-// long-press returns home; short press goes to the app's button handler
+// single press goes to the app's button handler; long-press returns home (see appsGoHome)
 void appsEncoder(int d) { if (g_active && g_active->onEncoder) g_active->onEncoder(d); }
 void appsButton()       { if (g_active && g_active->onButton)  g_active->onButton(); }
+void appsGoHome()       { activate(&launcher); }
+void appsDoubleButton() { if (g_active && g_active->onDoubleButton) g_active->onDoubleButton(); }
 void appsMessage(const char* json) {
   if (strstr(json, "\"app.setActive\"")) {
     const char* p = strstr(json, "\"id\":\"");

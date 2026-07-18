@@ -9,6 +9,7 @@ struct App {
   void (*onButton)();
   void (*onMessage)(const char* json);
   void (*render)();
+  void (*onDoubleButton)();
 };
 
 void appsBegin();
@@ -18,3 +19,5 @@ void appsMessage(const char* json);
 void appsTick();
 const char* appsActiveId();
 void appsRenderCatalogJson(char* out, size_t n);
+void appsGoHome();
+void appsDoubleButton();

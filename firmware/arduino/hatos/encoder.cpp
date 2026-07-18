@@ -42,3 +42,25 @@ bool encoderTakePress() {
   }
   return fired;
 }
+
+// ---- gesture detector (single / double / long press), active-high on PIN_BTN ----
+static bool g_btnState = false; static uint32_t g_lastEdge = 0, g_downAt = 0, g_lastRelease = 0;
+static bool g_longFired = false; static uint8_t g_taps = 0;
+static const uint32_t GLONG_MS = 600, GDTAP_MS = 280, GDEBOUNCE_MS = 25;
+
+EncoderGesture encoderGesture() {
+  uint32_t t = millis();
+  bool raw = (digitalRead(PIN_BTN) == HIGH);   // active-high
+  EncoderGesture ev = GESTURE_NONE;
+  if (raw != g_btnState && (t - g_lastEdge) > GDEBOUNCE_MS) {
+    g_lastEdge = t; g_btnState = raw;
+    if (raw) { g_downAt = t; g_longFired = false; }          // pressed
+    else {                                                    // released
+      if (!g_longFired) { g_taps++; g_lastRelease = t; if (g_taps >= 2) { ev = GESTURE_DOUBLE; g_taps = 0; } }
+      else g_taps = 0;
+    }
+  }
+  if (ev == GESTURE_NONE && g_btnState && !g_longFired && (t - g_downAt) > GLONG_MS) { g_longFired = true; g_taps = 0; ev = GESTURE_LONG; }
+  if (ev == GESTURE_NONE && g_taps == 1 && (t - g_lastRelease) > GDTAP_MS) { g_taps = 0; ev = GESTURE_SINGLE; }
+  return ev;
+}

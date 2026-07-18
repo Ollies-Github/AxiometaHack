@@ -85,11 +85,18 @@ void loop() {
     snprintf(msg, sizeof(msg), "{\"type\":\"encoder\",\"payload\":{\"delta\":%d,\"pressed\":false}}", d);
     bleSend(msg);
   }
-  if (encoderTakePress()) {
+  EncoderGesture g = encoderGesture();
+  if (g == GESTURE_SINGLE) {
     appsButton();
     bleSend("{\"type\":\"encoder\",\"payload\":{\"delta\":0,\"pressed\":true}}");
-    char msg[48]; snprintf(msg, sizeof(msg), "{\"type\":\"app.changed\",\"payload\":{\"id\":\"%s\"}}", appsActiveId());
-    bleSend(msg);
+    char m[48]; snprintf(m, sizeof(m), "{\"type\":\"app.changed\",\"payload\":{\"id\":\"%s\"}}", appsActiveId());
+    bleSend(m);
+  } else if (g == GESTURE_DOUBLE) {
+    appsDoubleButton();
+  } else if (g == GESTURE_LONG) {
+    appsGoHome();
+    char m[48]; snprintf(m, sizeof(m), "{\"type\":\"app.changed\",\"payload\":{\"id\":\"%s\"}}", appsActiveId());
+    bleSend(m);
   }
 
   bleFlush();
