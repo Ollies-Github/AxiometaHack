@@ -1,4 +1,6 @@
 #include <NimBLEDevice.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include "ble_link.h"
 #include "line_framer.h"
 
@@ -10,6 +12,10 @@ static NimBLECharacteristic* g_tx = nullptr;
 static void (*g_onMessage)(const char*) = nullptr;
 static bool g_connected = false;
 static LineFramer g_framer;
+// Serializes bleSend() so chunks from concurrent callers (loop() task and
+// the NimBLE host task, e.g. ping->pong reply from RxCb::onWrite) never
+// interleave on the wire.
+static SemaphoreHandle_t g_txMutex = nullptr;
 
 class RxCb : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic* c, NimBLEConnInfo&) override {
@@ -26,6 +32,7 @@ class SrvCb : public NimBLEServerCallbacks {
 
 void bleBegin(void (*onMessage)(const char* json)) {
   g_onMessage = onMessage;
+  g_txMutex = xSemaphoreCreateMutex();
   NimBLEDevice::init("HatOS");
   NimBLEDevice::setMTU(247);
   NimBLEServer* server = NimBLEDevice::createServer();
@@ -46,12 +53,14 @@ bool bleConnected() { return g_connected; }
 
 void bleSend(const char* json) {
   if (!g_connected || !g_tx) return;
+  if (g_txMutex) xSemaphoreTake(g_txMutex, portMAX_DELAY);
   std::string line = std::string(json) + "\n";
-  size_t mtu = 20;  // conservative payload; grows automatically if MTU negotiated higher
+  size_t mtu = 20;  // fixed conservative chunk size (guaranteed-minimum ATT payload); not negotiated MTU-aware
   for (size_t i = 0; i < line.size(); i += mtu) {
     std::string part = line.substr(i, mtu);
     g_tx->setValue((const uint8_t*)part.data(), part.size());
     g_tx->notify();
     delay(3);
   }
+  if (g_txMutex) xSemaphoreGive(g_txMutex);
 }
