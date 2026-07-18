@@ -22,11 +22,19 @@ export type Maneuver = {
   street: string;
 };
 
+// ---- Notes / teleprompter --------------------------------------------------
+// The full script (one string; newlines separate paragraphs) is pushed to the
+// hat, which word-wraps it and scrolls one line per encoder detent.
+export type NotesScript = { text: string };
+
 export type PhoneToHat =
   | { type: 'app.setActive'; payload: { id: string } }
   | { type: 'display.render'; payload: { lines: string[] } }
   | { type: 'music.state'; payload: MusicState }
   | { type: 'maps.maneuver'; payload: Maneuver }
+  | { type: 'notes.script'; payload: NotesScript }
+  | { type: 'theme'; payload: { mode: 'light' | 'dark' } }
+  | { type: 'led'; payload: { on: boolean } }
   | { type: 'ping' };
 
 export type HatToPhone =
@@ -34,4 +42,5 @@ export type HatToPhone =
   | { type: 'encoder'; payload: { delta: number; pressed: boolean } }
   | { type: 'app.changed'; payload: { id: string } }
   | { type: 'music.command'; payload: { action: MusicAction; value?: number } }
+  | { type: 'voice'; payload: { action: 'start' | 'stop' } }
   | { type: 'pong' };
