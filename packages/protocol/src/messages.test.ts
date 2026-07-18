@@ -16,4 +16,25 @@ describe('message types', () => {
     const parsed = JSON.parse(JSON.stringify(msg)) as HatToPhone;
     expect(parsed).toEqual(msg);
   });
+
+  it('round-trips a music.state message', () => {
+    const msg: PhoneToHat = {
+      type: 'music.state',
+      payload: { title: 'Placeholder Track', artist: 'Placeholder Artist', positionMs: 42000, durationMs: 180000, isPlaying: true, volume: 65 },
+    };
+    expect(JSON.parse(JSON.stringify(msg)) as PhoneToHat).toEqual(msg);
+  });
+
+  it('round-trips a music.command message', () => {
+    const msg: HatToPhone = { type: 'music.command', payload: { action: 'volume', value: 70 } };
+    expect(JSON.parse(JSON.stringify(msg)) as HatToPhone).toEqual(msg);
+  });
+
+  it('round-trips a maps.maneuver message', () => {
+    const msg: PhoneToHat = {
+      type: 'maps.maneuver',
+      payload: { turn: 'slight-left', distanceM: 250, street: 'Example Road' },
+    };
+    expect(JSON.parse(JSON.stringify(msg)) as PhoneToHat).toEqual(msg);
+  });
 });
