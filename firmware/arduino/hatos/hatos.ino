@@ -1,8 +1,17 @@
 #include "display.h"
 #include "encoder.h"
 #include "line_framer.h"
+#include "ble_link.h"
 
 static int counter = 0;
+
+static void onPhoneMessage(const char* json) {
+  Serial.printf("rx: %s\n", json);
+  // Echo: reply hat.ready to a ping so we can confirm bidirectional flow.
+  if (strstr(json, "\"ping\"")) {
+    bleSend("{\"type\":\"pong\"}");
+  }
+}
 
 static int g_selfTestLines = 0;
 static void selfTestSink(const char* line) { g_selfTestLines++; }
@@ -43,6 +52,7 @@ void setup() {
   Serial.println("\n== HatOS foundation ==");
   displayBegin();
   encoderBegin();
+  bleBegin(onPhoneMessage);
   const char* boot[] = {"HatOS", "ready"};
   displayLines(boot, 2);
   runFramerSelfTest();
@@ -58,6 +68,11 @@ void loop() {
     char line0[24]; snprintf(line0, sizeof(line0), "count %d", counter);
     const char* lines[] = {"encoder", line0};
     displayLines(lines, 2);
+    char msg[64];
+    snprintf(msg, sizeof(msg), "{\"type\":\"encoder\",\"payload\":{\"delta\":%d,\"pressed\":%s}}",
+             d, p ? "true" : "false");
+    bleSend(msg);
+    Serial.printf("tx: %s\n", msg);
   }
   delay(5);
 }
