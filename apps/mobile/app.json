@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "HatOS",
+    "slug": "hatos",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "hatos",
+    "userInterfaceStyle": "dark",
+    "plugins": ["expo-router"],
+    "ios": { "supportsTablet": true },
+    "android": { "edgeToEdgeEnabled": true },
+    "web": { "bundler": "metro" }
+  }
+}

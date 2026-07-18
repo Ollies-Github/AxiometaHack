@@ -1,0 +1,52 @@
+[
+  {
+    "name": "brim_servo_clamp",
+    "valid": true,
+    "solids": 1,
+    "bbox_mm": [
+      57.4,
+      52.0,
+      32.6
+    ]
+  },
+  {
+    "name": "clamp_wedge",
+    "valid": true,
+    "solids": 1,
+    "bbox_mm": [
+      43.0,
+      27.2,
+      4.3
+    ]
+  },
+  {
+    "name": "mg90s_fit_gauge",
+    "valid": true,
+    "solids": 1,
+    "bbox_mm": [
+      36.0,
+      2.4,
+      19.2
+    ]
+  },
+  {
+    "name": "servo_display_arm",
+    "valid": true,
+    "solids": 1,
+    "bbox_mm": [
+      85.0,
+      4.0,
+      51.0
+    ]
+  },
+  {
+    "name": "screen_cradle",
+    "valid": true,
+    "solids": 1,
+    "bbox_mm": [
+      12.4,
+      41.0,
+      26.0
+    ]
+  }
+]

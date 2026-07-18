@@ -1,0 +1,10 @@
+{
+  "servo_body_to_clamp": 0.0,
+  "down_arm_to_horn": 0.0,
+  "down_arm_to_clamp": 0.0,
+  "down_arm_to_servo": 0.0,
+  "down_cradle_to_clamp": 0.0,
+  "parked_arm_to_clamp": 0.0,
+  "parked_arm_to_servo": 0.0,
+  "parked_cradle_to_clamp": 0.0
+}
