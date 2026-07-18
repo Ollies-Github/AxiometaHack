@@ -2,18 +2,19 @@
 #include "encoder.h"
 #include "line_framer.h"
 #include "ble_link.h"
+#include "net_link.h"
 #include "apps.h"
 
 static void onPhoneMessage(const char* json) {
   Serial.printf("rx: %s\n", json);
   // Echo: reply hat.ready to a ping so we can confirm bidirectional flow.
   if (strstr(json, "\"ping\"")) {
-    bleSend("{\"type\":\"pong\"}");
+    hatSend("{\"type\":\"pong\"}");
     return;
   }
   appsMessage(json);
   char msg[48]; snprintf(msg, sizeof(msg), "{\"type\":\"app.changed\",\"payload\":{\"id\":\"%s\"}}", appsActiveId());
-  bleSend(msg);
+  hatSend(msg);
 }
 
 static int g_selfTestLines = 0;
@@ -56,6 +57,7 @@ void setup() {
   displayBegin();
   encoderBegin();
   bleBegin(onPhoneMessage);
+  netBegin(onPhoneMessage);
   appsBegin();
   const char* boot[] = {"HatOS", "ready"};
   displayLines(boot, 2);
@@ -74,7 +76,7 @@ void loop() {
     char msg[256];
     snprintf(msg, sizeof(msg),
       "{\"type\":\"hat.ready\",\"payload\":{\"name\":\"HatOS\",\"firmware\":\"foundation-0.1\",\"apps\":%s}}", cat);
-    bleSend(msg);
+    hatSend(msg);
   }
   g_wasSubscribed = bleSubscribed();
 
@@ -83,22 +85,23 @@ void loop() {
     appsEncoder(d);
     char msg[64];
     snprintf(msg, sizeof(msg), "{\"type\":\"encoder\",\"payload\":{\"delta\":%d,\"pressed\":false}}", d);
-    bleSend(msg);
+    hatSend(msg);
   }
   EncoderGesture g = encoderGesture();
   if (g == GESTURE_SINGLE) {
     appsButton();
-    bleSend("{\"type\":\"encoder\",\"payload\":{\"delta\":0,\"pressed\":true}}");
+    hatSend("{\"type\":\"encoder\",\"payload\":{\"delta\":0,\"pressed\":true}}");
     char m[48]; snprintf(m, sizeof(m), "{\"type\":\"app.changed\",\"payload\":{\"id\":\"%s\"}}", appsActiveId());
-    bleSend(m);
+    hatSend(m);
   } else if (g == GESTURE_DOUBLE) {
     appsDoubleButton();
   } else if (g == GESTURE_LONG) {
     appsGoHome();
     char m[48]; snprintf(m, sizeof(m), "{\"type\":\"app.changed\",\"payload\":{\"id\":\"%s\"}}", appsActiveId());
-    bleSend(m);
+    hatSend(m);
   }
 
   bleFlush();
+  netLoop();
   delay(5);
 }

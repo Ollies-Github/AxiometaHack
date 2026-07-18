@@ -1,6 +1,7 @@
 #include "app_framework.h"
 #include "display.h"
 #include "ble_link.h"
+#include "net_link.h"
 
 // forward decls of the five apps
 static App launcher, counterApp, textApp, musicApp, mapsApp;
@@ -90,14 +91,14 @@ static void musicEncoder(int d) {
   musicRender();
   char msg[80];
   snprintf(msg, sizeof(msg), "{\"type\":\"music.command\",\"payload\":{\"action\":\"volume\",\"value\":%d}}", g_mVol);
-  bleSend(msg);
+  hatSend(msg);
 }
 static void musicButton() {
   g_mPlaying = !g_mPlaying;
   musicRender();
-  bleSend("{\"type\":\"music.command\",\"payload\":{\"action\":\"playpause\"}}");
+  hatSend("{\"type\":\"music.command\",\"payload\":{\"action\":\"playpause\"}}");
 }
-static void musicDouble() { bleSend("{\"type\":\"music.command\",\"payload\":{\"action\":\"next\"}}"); }
+static void musicDouble() { hatSend("{\"type\":\"music.command\",\"payload\":{\"action\":\"next\"}}"); }
 static void musicMessage(const char* json) {
   if (!strstr(json, "\"music.state\"")) return;
   jsonStr(json, "title", g_mTitle, sizeof(g_mTitle));
