@@ -11,7 +11,6 @@ static const int REG_N = 5;
 static App* g_active = nullptr;
 static int  g_launchSel = 0;
 static int  g_count = 0;
-static char g_text[64] = "(no text)";
 
 // ---- small bounded JSON helpers (no JSON library) ----
 static void jsonStr(const char* json, const char* key, char* out, size_t n) {
@@ -59,34 +58,77 @@ static App* findById(const char* id) {
   return nullptr;
 }
 
-// ---- launcher ----
+// ---- launcher (home carousel) ----
+// The carousel lists the launchable apps only — REG[1..REG_N-1] — since REG[0]
+// is the launcher itself and "open Home from Home" makes no sense.
+static const int LAUNCH_N = REG_N - 1;
 static void launcherRender() {
-  const char* l0 = "Home";
-  char l1[24]; snprintf(l1, sizeof(l1), "> %s", REG[g_launchSel]->name);
-  const char* lines[] = {l0, l1};
-  displayLines(lines, 2);
+  App* a = REG[g_launchSel + 1];
+  displayLauncher(a->id, a->name, g_launchSel, LAUNCH_N, netIsConnected());
 }
 static void launcherEncoder(int d) {
-  g_launchSel = (g_launchSel + d) % REG_N;
-  if (g_launchSel < 0) g_launchSel += REG_N;
+  g_launchSel = (g_launchSel + d) % LAUNCH_N;
+  if (g_launchSel < 0) g_launchSel += LAUNCH_N;
   launcherRender();
 }
-static void launcherButton() { activate(REG[g_launchSel]); }
+static void launcherButton() { activate(REG[g_launchSel + 1]); }
+static void launcherDouble() {   // double-press on Home flips the theme
+  displaySetTheme(!displayThemeLight());
+  launcherRender();
+}
 
 // ---- counter app ----
-static void counterRender() {
-  char l1[24]; snprintf(l1, sizeof(l1), "%d", g_count);
-  const char* lines[] = {"Counter", l1};
-  displayLines(lines, 2);
-}
+static void counterRender() { displayCounter(g_count); }
 static void counterEncoder(int d) { g_count += d; counterRender(); }
 
-// ---- text app (shows text pushed from phone) ----
-static void textRender() { const char* lines[] = {"Notes", g_text}; displayLines(lines, 2); }
-static void textMessage(const char* json) {
-  const char* p = strstr(json, "\"lines\":[\"");
-  if (p) { p += 10; size_t i = 0; while (*p && *p != '"' && i < sizeof(g_text) - 1) g_text[i++] = *p++; g_text[i] = 0; }
-  textRender();
+// ---- notes / teleprompter app ----
+// Holds a full script pushed from the phone; the encoder scrolls it one wrapped
+// line per detent. The script arrives as
+// {"type":"notes.script","payload":{"text":"..."}} with JSON-escaped newlines.
+static char g_script[2048] = "Push a script from the phone, then turn the knob to scroll.";
+static int  g_topLine   = 0;
+static int  g_lineCount = 1;
+
+// Copy the "text" field out of `json` into g_script, unescaping JSON string
+// escapes (\n -> newline, \t -> space, \" \\ \/ literal, \r dropped, \uXXXX -> ?).
+static void parseScript(const char* json) {
+  const char* p = strstr(json, "\"text\":\"");
+  if (!p) return;
+  p += 8;
+  size_t i = 0;
+  while (*p && *p != '"' && i < sizeof(g_script) - 1) {
+    if (*p == '\\' && *(p + 1)) {
+      p++;
+      switch (*p) {
+        case 'n': g_script[i++] = '\n'; break;
+        case 't': g_script[i++] = ' ';  break;
+        case 'r': break;
+        case 'u': for (int k = 0; k < 4 && *(p + 1); k++) p++; g_script[i++] = '?'; break;
+        default:  g_script[i++] = *p;    break;   // covers \" \\ \/ and any other
+      }
+      p++;
+    } else {
+      g_script[i++] = *p++;
+    }
+  }
+  g_script[i] = 0;
+}
+
+static void notesRender() { g_lineCount = displayTeleprompter(g_script, g_topLine); }
+static void notesEnter()  { g_topLine = 0; notesRender(); }
+static void notesEncoder(int d) {
+  int maxTop = (g_lineCount > 0) ? g_lineCount - 1 : 0;
+  g_topLine += d;
+  if (g_topLine < 0) g_topLine = 0;
+  if (g_topLine > maxTop) g_topLine = maxTop;
+  notesRender();
+}
+static void notesMessage(const char* json) {
+  if (!strstr(json, "\"notes.script\"")) return;
+  parseScript(json);
+  g_topLine = 0;
+  g_lineCount = teleprompterCountLines(g_script);
+  if (g_active == &textApp) notesRender();
 }
 
 // ---- music app (now-playing card + transport commands over BLE) ----
@@ -145,6 +187,9 @@ static void musicMessage(const char* json) {
   g_mVol = (int)jsonInt(json, "volume", g_mVol);
   g_mBasePos = jsonInt(json, "positionMs", 0);
   g_mBaseMs = millis();
+  // Update state always, but only draw when Music is on screen — otherwise the
+  // bridge's 1 Hz updates would stomp whatever app the user switched to.
+  if (g_active != &musicApp) return;
   if (trackChanged) {
     g_titleScroll = 0;
     displayMusicStatic(g_mArtist);
@@ -168,13 +213,13 @@ static void mapsMessage(const char* json) {
   jsonStr(json, "turn", g_turn, sizeof(g_turn));
   g_dist = jsonInt(json, "distanceM", g_dist);
   jsonStr(json, "street", g_street, sizeof(g_street));
-  mapsRender();
+  if (g_active == &mapsApp) mapsRender();   // only draw when Maps is on screen
 }
 
 void appsBegin() {
-  launcher   = {"launcher", "Home",    nullptr, launcherEncoder, launcherButton, nullptr, launcherRender, nullptr, nullptr};
+  launcher   = {"launcher", "Home",    nullptr, launcherEncoder, launcherButton, nullptr, launcherRender, launcherDouble, nullptr};
   counterApp = {"counter",  "Counter", nullptr, counterEncoder,  nullptr,        nullptr, counterRender, nullptr, nullptr};
-  textApp    = {"notes",    "Notes",   nullptr, nullptr,         nullptr,        textMessage, textRender, nullptr, nullptr};
+  textApp    = {"notes",    "Notes",   notesEnter, notesEncoder, nullptr,        notesMessage, notesRender, nullptr, nullptr};
   musicApp   = {"music",    "Music",   musicEnter, musicEncoder, musicButton,    musicMessage, musicRender, musicDouble, musicTick};
   mapsApp    = {"maps",     "Maps",    mapsEnter,  nullptr,      nullptr,        mapsMessage,  mapsRender, nullptr, nullptr};
   activate(&launcher);
@@ -186,6 +231,11 @@ void appsButton()       { if (g_active && g_active->onButton)  g_active->onButto
 void appsGoHome()       { activate(&launcher); }
 void appsDoubleButton() { if (g_active && g_active->onDoubleButton) g_active->onDoubleButton(); }
 void appsMessage(const char* json) {
+  if (strstr(json, "\"theme\"")) {   // phone toggles the light/dark theme
+    displaySetTheme(strstr(json, "\"light\"") != nullptr);
+    if (g_active && g_active->render) g_active->render();
+    return;
+  }
   if (strstr(json, "\"app.setActive\"")) {
     const char* p = strstr(json, "\"id\":\"");
     if (p) { char id[24]; size_t i = 0; p += 6; while (*p && *p != '"' && i < 23) id[i++] = *p++; id[i] = 0;

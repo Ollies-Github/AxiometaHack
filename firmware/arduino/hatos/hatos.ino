@@ -4,12 +4,18 @@
 #include "ble_link.h"
 #include "net_link.h"
 #include "apps.h"
+#include "aibutton.h"
+#include "voice_capture.h"
 
 static void onPhoneMessage(const char* json) {
   Serial.printf("rx: %s\n", json);
   // Echo: reply hat.ready to a ping so we can confirm bidirectional flow.
   if (strstr(json, "\"ping\"")) {
     hatSend("{\"type\":\"pong\"}");
+    return;
+  }
+  if (strstr(json, "\"led\"")) {   // phone drives the AI-button LED (on while thinking)
+    aiLedSet(strstr(json, "true") != nullptr);
     return;
   }
   appsMessage(json);
@@ -55,12 +61,13 @@ void setup() {
   delay(300);
   Serial.println("\n== HatOS foundation ==");
   displayBegin();
+  displayBootSplash();     // branded splash, visible through the WiFi join
   encoderBegin();
   bleBegin(onPhoneMessage);
   netBegin(onPhoneMessage);
   appsBegin();
-  const char* boot[] = {"HatOS", "ready"};
-  displayLines(boot, 2);
+  aiButtonBegin();
+  voiceBegin();
   runFramerSelfTest();
   runOverflowSelfTest();
 }
@@ -100,6 +107,18 @@ void loop() {
     char m[48]; snprintf(m, sizeof(m), "{\"type\":\"app.changed\",\"payload\":{\"id\":\"%s\"}}", appsActiveId());
     hatSend(m);
   }
+
+  // AI push-to-talk button (Port 3): press records from the onboard mic while
+  // held (blocking), then streams the WAV to the phone over WS to transcribe.
+  // The LED stays lit until the phone reports done (or the safety timeout).
+  int ab = aiButtonPoll();
+  if (ab > 0) {
+    aiLedSet(true);                    // solid LED = recording, for as long as you hold
+    const uint8_t* wav; size_t len = voiceCaptureWav(&wav);
+    aiLedSet(false);                   // off the instant you release
+    if (len) { netBroadcastBin(wav, len); Serial.printf("voice: streamed %u byte WAV\n", (unsigned)len); }
+  }
+  aiLedTick();
 
   static uint32_t lastTick = 0;
   if (millis() - lastTick > 90) { lastTick = millis(); appsTick(); }
