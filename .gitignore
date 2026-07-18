@@ -9,3 +9,16 @@ __pycache__/
 .env
 .env.local
 firmware/.pio/
+
+# Arduino build output
+build/
+*.elf
+*.hex
+
+# Audio assets — supply your own; never commit copyrighted audio
+*.mp3
+*.m4a
+*.wav
+*.raw
+*.flac
+*.aac
