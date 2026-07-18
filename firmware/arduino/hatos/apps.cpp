@@ -2,10 +2,10 @@
 #include "display.h"
 #include "ble_link.h"
 
-// forward decls of the four apps
-static App launcher, counterApp, textApp, musicApp;
-static App* REG[] = {&launcher, &counterApp, &textApp, &musicApp};
-static const int REG_N = 4;
+// forward decls of the five apps
+static App launcher, counterApp, textApp, musicApp, mapsApp;
+static App* REG[] = {&launcher, &counterApp, &textApp, &musicApp, &mapsApp};
+static const int REG_N = 5;
 
 static App* g_active = nullptr;
 static int  g_launchSel = 0;
@@ -109,11 +109,27 @@ static void musicMessage(const char* json) {
   musicRender();
 }
 
+// ---- maps app (driver's-eye turn-by-turn view, pushed from the phone) ----
+static char g_turn[16]   = "straight";
+static long g_dist       = 0;
+static char g_street[40] = "";
+
+static void mapsRender() { displayManeuver(g_turn, g_dist, g_street); }
+static void mapsEnter()  { mapsRender(); }
+static void mapsMessage(const char* json) {
+  if (!strstr(json, "\"maps.maneuver\"")) return;
+  jsonStr(json, "turn", g_turn, sizeof(g_turn));
+  g_dist = jsonInt(json, "distanceM", g_dist);
+  jsonStr(json, "street", g_street, sizeof(g_street));
+  mapsRender();
+}
+
 void appsBegin() {
   launcher   = {"launcher", "Home",    nullptr, launcherEncoder, launcherButton, nullptr, launcherRender, nullptr};
   counterApp = {"counter",  "Counter", nullptr, counterEncoder,  nullptr,        nullptr, counterRender, nullptr};
   textApp    = {"notes",    "Notes",   nullptr, nullptr,         nullptr,        textMessage, textRender, nullptr};
   musicApp   = {"music",    "Music",   musicEnter, musicEncoder, musicButton,    musicMessage, musicRender, musicDouble};
+  mapsApp    = {"maps",     "Maps",    mapsEnter,  nullptr,      nullptr,        mapsMessage,  mapsRender, nullptr};
   activate(&launcher);
 }
 
