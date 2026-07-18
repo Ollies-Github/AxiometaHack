@@ -1,5 +1,10 @@
 import { Stack } from 'expo-router';
+import { HatProvider } from '../src/ws/HatContext';
 
 export default function RootLayout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <HatProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </HatProvider>
+  );
 }

@@ -10,20 +10,32 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useHatWs } from '../src/ws/useHatWs';
+import { useHat } from '../src/ws/HatContext';
 
 const APPS = ['launcher', 'counter', 'notes', 'music', 'maps'];
 const TURNS: Turn[] = ['left', 'slight-left', 'straight', 'slight-right', 'right', 'uturn'];
 
+const SAMPLE_SCRIPT = `Hi everyone, thanks for coming.
+
+Today we're showing HatOS — a wearable second screen you control with a knob.
+
+It runs apps: a music remote, turn-by-turn maps, and this teleprompter you're reading right now.
+
+Turn the encoder to scroll. The motor buzzes on every line so you can pace yourself without looking down.
+
+Let's dive in.`;
+
 export default function Control() {
-  const { status, last, log, connect, disconnect, send } = useHatWs();
-  const [url, setUrl] = useState('ws://192.168.4.1:81');
+  const { status, url, setUrl, activeApp, last, log, connect, disconnect, send } = useHat();
 
   // music form
   const [title, setTitle] = useState('Track Title');
   const [artist, setArtist] = useState('Artist Name');
   const [playing, setPlaying] = useState(true);
   const [volume, setVolume] = useState(60);
+
+  // teleprompter
+  const [script, setScript] = useState(SAMPLE_SCRIPT);
 
   // maps form
   const [distance, setDistance] = useState('250');
@@ -54,18 +66,47 @@ export default function Control() {
               </Text>
             </Pressable>
           </View>
-          <TextInput value={url} onChangeText={setUrl} autoCapitalize="none" style={s.input} placeholder="ws://192.168.4.1:81" placeholderTextColor="#5b6472" />
-          <Text style={s.hint}>Join the WiFi network “HatOS” (password hatos1234), then Connect.</Text>
+          <TextInput value={url} onChangeText={setUrl} autoCapitalize="none" style={s.input} placeholder="ws://172.20.10.2:81" placeholderTextColor="#5b6472" />
+          <Text style={s.hint}>Same WiFi as the hat. It prints its IP on boot — use ws://&lt;that-ip&gt;:81. (If it fell back to SoftAP, join “HatOS” / hatos1234 and use ws://192.168.4.1:81.)</Text>
         </View>
 
         {/* App switcher */}
         <Text style={s.section}>Active app</Text>
         <View style={s.wrap}>
           {APPS.map((id) => (
-            <Pressable key={id} onPress={() => send({ type: 'app.setActive', payload: { id } })} style={s.chip}>
+            <Pressable key={id} onPress={() => send({ type: 'app.setActive', payload: { id } })} style={[s.chip, activeApp === id && s.chipOn]}>
               <Text style={s.chipText}>{id}</Text>
             </Pressable>
           ))}
+        </View>
+
+        {/* Teleprompter */}
+        <Text style={s.section}>Teleprompter · notes</Text>
+        <View style={s.card}>
+          <TextInput
+            value={script}
+            onChangeText={setScript}
+            multiline
+            textAlignVertical="top"
+            style={[s.input, s.scriptInput]}
+            placeholder="Paste your script — turn the knob on the hat to scroll it."
+            placeholderTextColor="#5b6472"
+          />
+          <View style={s.rowBetween}>
+            <Text style={s.hint}>{script.length} chars</Text>
+            <Pressable onPress={() => setScript('')} style={s.chip}>
+              <Text style={s.chipText}>Clear</Text>
+            </Pressable>
+          </View>
+          <Pressable
+            onPress={() => {
+              send({ type: 'app.setActive', payload: { id: 'notes' } });
+              send({ type: 'notes.script', payload: { text: script } });
+            }}
+            style={[s.btn, s.btnGreen]}
+          >
+            <Text style={s.btnGreenText}>Send to teleprompter</Text>
+          </Pressable>
         </View>
 
         {/* Music */}
@@ -136,6 +177,7 @@ const s = StyleSheet.create({
   dot: { width: 9, height: 9, borderRadius: 5 },
   status: { color: '#cbd3df', fontSize: 14, fontWeight: '700' },
   input: { backgroundColor: '#05070a', borderColor: '#28303d', borderWidth: 1, borderRadius: 10, color: '#f4f7fb', paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
+  scriptInput: { minHeight: 132, lineHeight: 20 },
   hint: { color: '#727c90', fontSize: 12, lineHeight: 16 },
   section: { color: '#f4f7fb', fontSize: 15, fontWeight: '800', marginTop: 10 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
