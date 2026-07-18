@@ -19,6 +19,9 @@ static void onWsEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t len) 
     size_t n = (len < sizeof(buf) - 1) ? len : sizeof(buf) - 1;
     memcpy(buf, payload, n); buf[n] = 0;
     g_onMsg(buf);                 // one JSON message per WS text frame
+  } else if (type == WStype_BIN) {
+    extern void musicSetArt(const uint8_t* data, size_t len);
+    musicSetArt(payload, len);    // binary frame: 64x64 RGB565 album-art bitmap
   }
 }
 

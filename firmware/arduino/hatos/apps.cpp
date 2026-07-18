@@ -41,6 +41,9 @@ static uint32_t g_mBaseMs = 0;   // millis() at last update
 static long g_mDur     = 0;
 static bool g_mPlaying = false;
 static int  g_mVol     = 50;
+static uint16_t g_art[64*64];
+static bool g_hasArt = false;
+static int  g_titleScroll = 0;   // marquee offset in pixels
 
 static long musicPosNow() {
   long p = g_mPlaying ? g_mBasePos + (long)(millis() - g_mBaseMs) : g_mBasePos;
@@ -91,10 +94,30 @@ static void textMessage(const char* json) {
 // otherwise only the changing regions (bar fill, icon, volume) repaint, and
 // position is interpolated locally so the bar animates smoothly between the
 // 1 Hz music.state updates from the phone.
-static void musicFull() { displayMusicStatic(g_mTitle, g_mArtist); displayMusicProgress(musicPct(), g_mPlaying, g_mVol); }
+static void musicFull() {
+  displayMusicStatic(g_mArtist);
+  displayMusicArt(g_art, g_hasArt);
+  displayMusicTitle(g_mTitle, g_titleScroll);
+  displayMusicProgress(musicPct(), g_mPlaying, g_mVol);
+}
 static void musicEnter() { musicFull(); }
 static void musicRender() { musicFull(); }  // used on activate
-static void musicTick() { displayMusicProgress(musicPct(), g_mPlaying, g_mVol); }  // smooth, partial
+static void musicTick() {  // smooth, partial: advance marquee + interpolated progress
+  g_titleScroll += 3;
+  displayMusicTitle(g_mTitle, g_titleScroll);
+  displayMusicProgress(musicPct(), g_mPlaying, g_mVol);
+}
+
+// Reconstruct the 64x64 RGB565 (hi-byte-first) album-art frame streamed from
+// the Mac bridge over the binary WebSocket channel; redraw immediately if
+// the music app is currently on screen.
+void musicSetArt(const uint8_t* d, size_t len) {
+  Serial.printf("art rx: %u bytes\n", (unsigned)len);
+  if (len != 64*64*2) return;
+  for (int i = 0; i < 64*64; i++) g_art[i] = ((uint16_t)d[2*i] << 8) | d[2*i+1];
+  g_hasArt = true;
+  if (g_active == &musicApp) displayMusicArt(g_art, true);
+}
 
 static void musicEncoder(int d) {
   g_mVol = constrain(g_mVol + d * 5, 0, 100);
@@ -122,7 +145,14 @@ static void musicMessage(const char* json) {
   g_mVol = (int)jsonInt(json, "volume", g_mVol);
   g_mBasePos = jsonInt(json, "positionMs", 0);
   g_mBaseMs = millis();
-  if (trackChanged) displayMusicStatic(g_mTitle, g_mArtist);
+  if (trackChanged) {
+    g_titleScroll = 0;
+    displayMusicStatic(g_mArtist);
+    displayMusicArt(g_art, g_hasArt);
+    displayMusicTitle(g_mTitle, g_titleScroll);
+  } else {
+    displayMusicTitle(g_mTitle, g_titleScroll);
+  }
   displayMusicProgress(musicPct(), g_mPlaying, g_mVol);
 }
 
