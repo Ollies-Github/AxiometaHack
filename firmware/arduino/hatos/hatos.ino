@@ -15,6 +15,28 @@ static void runFramerSelfTest() {
                 g_selfTestLines == 2 ? "PASS" : "FAIL", g_selfTestLines);
 }
 
+static int g_overflowTestLines = 0;
+static bool g_overflowTestLineOk = false;
+static void overflowTestSink(const char* line) {
+  g_overflowTestLines++;
+  g_overflowTestLineOk = (strcmp(line, "ok") == 0);
+}
+
+static void runOverflowSelfTest() {
+  LineFramer f;
+  // Build a single line longer than the 240-char buffer, followed by a
+  // valid short line. The oversized line must be fully dropped: no
+  // phantom fragment should reach onLine, and the only emitted line
+  // should be "ok".
+  String s;
+  for (int i = 0; i < 300; i++) s += 'x';
+  s += "\nok\n";
+  f.push((const uint8_t*)s.c_str(), s.length(), overflowTestSink);
+  bool pass = (g_overflowTestLines == 1) && g_overflowTestLineOk;
+  Serial.printf("overflow self-test: %s (%d lines, expected 1)\n",
+                pass ? "PASS" : "FAIL", g_overflowTestLines);
+}
+
 void setup() {
   Serial.begin(115200);
   delay(300);
@@ -24,6 +46,7 @@ void setup() {
   const char* boot[] = {"HatOS", "ready"};
   displayLines(boot, 2);
   runFramerSelfTest();
+  runOverflowSelfTest();
 }
 
 void loop() {
