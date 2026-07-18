@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Widget, WidgetId } from '@hatos/protocol';
+import { Link } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useMemo, useState } from 'react';
 import {
@@ -56,6 +57,13 @@ export default function HomeScreen() {
             <Text style={styles.connectionText}>Demo Hat</Text>
           </View>
         </View>
+
+        <Link href="/control" asChild>
+          <Pressable accessibilityRole="button" style={styles.liveButton}>
+            <MaterialCommunityIcons name="wifi" size={20} color="#071008" />
+            <Text style={styles.liveText}>Live Control (WiFi) →</Text>
+          </Pressable>
+        </Link>
 
         <View style={styles.heroCard}>
           <View style={styles.previewRow}>
@@ -117,6 +125,8 @@ const styles = StyleSheet.create({
   connection: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#151b25', paddingHorizontal: 11, paddingVertical: 8, borderRadius: 999 },
   connectionText: { color: '#cbd3df', fontSize: 12, fontWeight: '700' },
   onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#78f294' },
+  liveButton: { backgroundColor: '#67e8f9', minHeight: 50, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
+  liveText: { color: '#071008', fontSize: 15, fontWeight: '900' },
   heroCard: { backgroundColor: '#121720', borderColor: '#242c39', borderWidth: 1, borderRadius: 22, padding: 16, gap: 16 },
   previewRow: { flexDirection: 'row', gap: 12 },
   previewWrap: { flex: 1, gap: 7 },
