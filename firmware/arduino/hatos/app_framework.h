@@ -10,6 +10,7 @@ struct App {
   void (*onMessage)(const char* json);
   void (*render)();
   void (*onDoubleButton)();
+  void (*onTick)();
 };
 
 void appsBegin();

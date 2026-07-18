@@ -32,12 +32,23 @@ static bool jsonBoolTrue(const char* json, const char* key) {
 }
 
 // ---- music app state (metadata only - no audio) ----
+// Position is interpolated locally between 1 Hz phone updates: g_mBasePos is
+// the last reported position (ms) and g_mBaseMs is millis() at that report.
 static char g_mTitle[40]  = "—";
 static char g_mArtist[40] = "";
-static long g_mPos     = 0;
+static long g_mBasePos = 0;      // position (ms) reported at last update
+static uint32_t g_mBaseMs = 0;   // millis() at last update
 static long g_mDur     = 0;
 static bool g_mPlaying = false;
 static int  g_mVol     = 50;
+
+static long musicPosNow() {
+  long p = g_mPlaying ? g_mBasePos + (long)(millis() - g_mBaseMs) : g_mBasePos;
+  if (p < 0) p = 0;
+  if (g_mDur > 0 && p > g_mDur) p = g_mDur;
+  return p;
+}
+static int musicPct() { return (g_mDur > 0) ? (int)(100 * musicPosNow() / g_mDur) : 0; }
 
 static void activate(App* a) { g_active = a; if (a->onEnter) a->onEnter(); if (a->render) a->render(); }
 static App* findById(const char* id) {
@@ -76,38 +87,43 @@ static void textMessage(const char* json) {
 }
 
 // ---- music app (now-playing card + transport commands over BLE) ----
-static void musicRender() {
-  int pct = 0;
-  if (g_mDur > 0) {
-    pct = (int)(100 * g_mPos / g_mDur);
-    if (pct < 0) pct = 0;
-    if (pct > 100) pct = 100;
-  }
-  displayMusic(g_mTitle, g_mArtist, pct, g_mPlaying, g_mVol);
-}
-static void musicEnter() { musicRender(); }
+// Full redraw (fillScreen) happens only on track change or app activation;
+// otherwise only the changing regions (bar fill, icon, volume) repaint, and
+// position is interpolated locally so the bar animates smoothly between the
+// 1 Hz music.state updates from the phone.
+static void musicFull() { displayMusicStatic(g_mTitle, g_mArtist); displayMusicProgress(musicPct(), g_mPlaying, g_mVol); }
+static void musicEnter() { musicFull(); }
+static void musicRender() { musicFull(); }  // used on activate
+static void musicTick() { displayMusicProgress(musicPct(), g_mPlaying, g_mVol); }  // smooth, partial
+
 static void musicEncoder(int d) {
   g_mVol = constrain(g_mVol + d * 5, 0, 100);
-  musicRender();
+  displayMusicProgress(musicPct(), g_mPlaying, g_mVol);  // partial, not full
   char msg[80];
   snprintf(msg, sizeof(msg), "{\"type\":\"music.command\",\"payload\":{\"action\":\"volume\",\"value\":%d}}", g_mVol);
   hatSend(msg);
 }
-static void musicButton() {
-  g_mPlaying = !g_mPlaying;
-  musicRender();
+static void musicButton() {  // keep existing playpause behavior
+  g_mPlaying = !g_mPlaying; g_mBasePos = musicPosNow(); g_mBaseMs = millis();
+  displayMusicProgress(musicPct(), g_mPlaying, g_mVol);
   hatSend("{\"type\":\"music.command\",\"payload\":{\"action\":\"playpause\"}}");
 }
 static void musicDouble() { hatSend("{\"type\":\"music.command\",\"payload\":{\"action\":\"next\"}}"); }
 static void musicMessage(const char* json) {
   if (!strstr(json, "\"music.state\"")) return;
-  jsonStr(json, "title", g_mTitle, sizeof(g_mTitle));
-  jsonStr(json, "artist", g_mArtist, sizeof(g_mArtist));
-  g_mPos = jsonInt(json, "positionMs", g_mPos);
-  g_mDur = jsonInt(json, "durationMs", g_mDur);
+  char title[40], artist[40];
+  jsonStr(json, "title", title, sizeof(title));
+  jsonStr(json, "artist", artist, sizeof(artist));
+  bool trackChanged = (strcmp(title, g_mTitle) != 0) || (strcmp(artist, g_mArtist) != 0);
+  strncpy(g_mTitle, title, sizeof(g_mTitle) - 1); g_mTitle[sizeof(g_mTitle) - 1] = 0;
+  strncpy(g_mArtist, artist, sizeof(g_mArtist) - 1); g_mArtist[sizeof(g_mArtist) - 1] = 0;
+  g_mDur = jsonInt(json, "durationMs", 0);
   g_mPlaying = jsonBoolTrue(json, "isPlaying");
   g_mVol = (int)jsonInt(json, "volume", g_mVol);
-  musicRender();
+  g_mBasePos = jsonInt(json, "positionMs", 0);
+  g_mBaseMs = millis();
+  if (trackChanged) displayMusicStatic(g_mTitle, g_mArtist);
+  displayMusicProgress(musicPct(), g_mPlaying, g_mVol);
 }
 
 // ---- maps app (driver's-eye turn-by-turn view, pushed from the phone) ----
@@ -126,11 +142,11 @@ static void mapsMessage(const char* json) {
 }
 
 void appsBegin() {
-  launcher   = {"launcher", "Home",    nullptr, launcherEncoder, launcherButton, nullptr, launcherRender, nullptr};
-  counterApp = {"counter",  "Counter", nullptr, counterEncoder,  nullptr,        nullptr, counterRender, nullptr};
-  textApp    = {"notes",    "Notes",   nullptr, nullptr,         nullptr,        textMessage, textRender, nullptr};
-  musicApp   = {"music",    "Music",   musicEnter, musicEncoder, musicButton,    musicMessage, musicRender, musicDouble};
-  mapsApp    = {"maps",     "Maps",    mapsEnter,  nullptr,      nullptr,        mapsMessage,  mapsRender, nullptr};
+  launcher   = {"launcher", "Home",    nullptr, launcherEncoder, launcherButton, nullptr, launcherRender, nullptr, nullptr};
+  counterApp = {"counter",  "Counter", nullptr, counterEncoder,  nullptr,        nullptr, counterRender, nullptr, nullptr};
+  textApp    = {"notes",    "Notes",   nullptr, nullptr,         nullptr,        textMessage, textRender, nullptr, nullptr};
+  musicApp   = {"music",    "Music",   musicEnter, musicEncoder, musicButton,    musicMessage, musicRender, musicDouble, musicTick};
+  mapsApp    = {"maps",     "Maps",    mapsEnter,  nullptr,      nullptr,        mapsMessage,  mapsRender, nullptr, nullptr};
   activate(&launcher);
 }
 
@@ -148,7 +164,7 @@ void appsMessage(const char* json) {
   }
   if (g_active && g_active->onMessage) g_active->onMessage(json);
 }
-void appsTick() { if (g_active && g_active->render) g_active->render(); }
+void appsTick() { if (g_active && g_active->onTick) g_active->onTick(); }
 const char* appsActiveId() { return g_active ? g_active->id : "launcher"; }
 void appsRenderCatalogJson(char* out, size_t n) {
   if (n == 0) return;

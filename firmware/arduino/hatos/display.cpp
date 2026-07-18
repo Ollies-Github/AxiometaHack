@@ -26,12 +26,10 @@ void displayLines(const char* const* lines, int count) {
   }
 }
 
-// "Now playing" card: title/artist + progress bar + play/pause + volume.
-// Metadata only (no audio) - drives the transport UI for the Music app.
-void displayMusic(const char* title, const char* artist, int pct, bool playing, int vol) {
-  if (pct < 0) pct = 0;
-  if (pct > 100) pct = 100;
-
+// "Now playing" card, split into a static part (redrawn only on track change)
+// and a dynamic part (progress bar / play-pause / volume, repainted often
+// without a fillScreen so smooth interpolated progress doesn't flicker).
+void displayMusicStatic(const char* title, const char* artist) {
   tft.fillScreen(ST77XX_BLACK);
 
   tft.setTextColor(ST77XX_WHITE);
@@ -49,10 +47,18 @@ void displayMusic(const char* title, const char* artist, int pct, bool playing, 
   tft.setCursor(4, 24);
   tft.print(artist);
 
-  tft.drawRect(4, 42, 152, 8, 0x8410);
-  int fillW = (152 - 2) * pct / 100;
+  tft.drawRect(4, 42, 152, 8, 0x8410);  // progress bar outline (static)
+}
+
+void displayMusicProgress(int pct, bool playing, int vol) {
+  if (pct < 0) pct = 0;
+  if (pct > 100) pct = 100;
+
+  tft.fillRect(5, 43, 150, 6, ST77XX_BLACK);  // clear inside of bar
+  int fillW = 150 * pct / 100;
   if (fillW > 0) tft.fillRect(5, 43, fillW, 6, 0x07E0);
 
+  tft.fillRect(0, 54, 16, 14, ST77XX_BLACK);  // clear icon area
   if (playing) {
     tft.fillTriangle(4, 56, 4, 66, 12, 61, ST77XX_WHITE);
   } else {
@@ -60,6 +66,7 @@ void displayMusic(const char* title, const char* artist, int pct, bool playing, 
     tft.fillRect(9, 56, 3, 10, ST77XX_WHITE);
   }
 
+  tft.fillRect(96, 54, 60, 12, ST77XX_BLACK);  // clear vol text
   tft.setTextColor(ST77XX_WHITE);
   tft.setTextSize(1);
   tft.setCursor(100, 56);

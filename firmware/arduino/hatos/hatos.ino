@@ -101,6 +101,9 @@ void loop() {
     hatSend(m);
   }
 
+  static uint32_t lastTick = 0;
+  if (millis() - lastTick > 90) { lastTick = millis(); appsTick(); }
+
   bleFlush();
   netLoop();
   delay(5);
