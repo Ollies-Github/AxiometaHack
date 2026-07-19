@@ -13,13 +13,19 @@ import {
 import { useHat } from '../src/ws/HatContext';
 
 const LS_KEY = 'hatos.modalurl';
+// Deployed Modal STT endpoint — baked in as the default so it just works without
+// entering it (localStorage still overrides if you set a different one).
+const MODAL_DEFAULT = 'https://malidudle36--hatos-stt-web.modal.run';
 function loadUrl(): string {
   try {
-    if (typeof localStorage !== 'undefined') return localStorage.getItem(LS_KEY) ?? '';
+    if (typeof localStorage !== 'undefined') {
+      const v = localStorage.getItem(LS_KEY);
+      if (v) return v;
+    }
   } catch {
     /* ignore */
   }
-  return '';
+  return MODAL_DEFAULT;
 }
 
 // Browser media APIs (present on web; typed as any so RN's lib doesn't complain).

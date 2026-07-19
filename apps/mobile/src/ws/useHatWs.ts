@@ -4,29 +4,40 @@ import type { PhoneToHat, HatToPhone, AppInfo } from '@hatos/protocol';
 export type WsStatus = 'disconnected' | 'connecting' | 'connected';
 
 const DEFAULT_URL = 'ws://172.20.10.2:81';
+// When the app is served over HTTPS (e.g. via the Cloudflare tunnel on a phone),
+// a plain ws:// to the hat is blocked as mixed content — connect via the hat's
+// wss tunnel instead. (Ephemeral trycloudflare URL; update when the tunnel restarts.)
+const HAT_WSS = 'wss://uni-vinyl-usual-formerly.trycloudflare.com';
 const LS_KEY = 'hatos.wsurl';
 const MODAL_KEY = 'hatos.modalurl';
 const RETRY_MS = 1800;
 
+// Deployed Modal STT endpoint, baked in as the default (localStorage overrides).
+const MODAL_DEFAULT = 'https://malidudle36--hatos-stt-web.modal.run';
 function loadModalUrl(): string {
   try {
-    if (typeof localStorage !== 'undefined') return (localStorage.getItem(MODAL_KEY) ?? '').trim();
+    if (typeof localStorage !== 'undefined') {
+      const v = (localStorage.getItem(MODAL_KEY) ?? '').trim();
+      if (v) return v;
+    }
   } catch {
     /* ignore */
   }
-  return '';
+  return MODAL_DEFAULT;
 }
 
 function loadUrl(): string {
+  const secure = typeof location !== 'undefined' && location.protocol === 'https:';
   try {
     if (typeof localStorage !== 'undefined') {
       const v = localStorage.getItem(LS_KEY);
-      if (v) return v;
+      // Ignore a stored insecure ws:// URL on an HTTPS page — it would be blocked.
+      if (v && !(secure && v.startsWith('ws://'))) return v;
     }
   } catch {
     /* localStorage unavailable (native) — fall through to default */
   }
-  return DEFAULT_URL;
+  return secure ? HAT_WSS : DEFAULT_URL;
 }
 function persistUrl(v: string) {
   try {
