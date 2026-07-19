@@ -37,11 +37,25 @@ static void onWsEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t len) 
   }
 }
 
+static bool g_wasConnected = false;
+static uint32_t g_lastRetry = 0;
+
+static void wifiReport(const char* tag) {
+  IPAddress ip = WiFi.localIP();
+  Serial.printf("%s  http://%s/  ws://%s:81\n", tag, ip.toString().c_str(), ip.toString().c_str());
+  String ips = ip.toString();
+  const char* lines[] = {"WiFi OK", ips.c_str()};
+  displayLines(lines, 2);
+}
+
 void netBegin(void (*onMessage)(const char* json)) {
   g_onMsg = onMessage;
-  IPAddress ip;
 #ifdef WIFI_SSID
   // Station mode: join a real WiFi (needed for internet-backed apps like Spotify).
+  // Auto-reconnect handles brief drops; netLoop re-issues begin() for longer
+  // outages, so the hat is never stranded after a single failed attempt.
+  WiFi.persistent(false);
+  WiFi.setAutoReconnect(true);
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   Serial.printf("WiFi: joining \"%s\" ", WIFI_SSID);
@@ -49,31 +63,52 @@ void netBegin(void (*onMessage)(const char* json)) {
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < 15000) { delay(250); Serial.print("."); }
   Serial.println();
   if (WiFi.status() == WL_CONNECTED) {
-    ip = WiFi.localIP();
-    Serial.printf("WiFi OK: joined \"%s\"  http://%s/  ws://%s:81\n",
-                  WIFI_SSID, ip.toString().c_str(), ip.toString().c_str());
-    String ips = ip.toString();
-    const char* lines[] = {"WiFi OK", ips.c_str()};
-    displayLines(lines, 2);
-    delay(1800);
+    g_wasConnected = true;
+    wifiReport("WiFi OK: joined");
+    delay(1500);
   } else {
-    Serial.println("WiFi FAILED -> SoftAP fallback");
-  }
-#endif
-  if (WiFi.status() != WL_CONNECTED) {
-    WiFi.mode(WIFI_AP);
+    // Not up yet: raise SoftAP so the hat stays reachable, but keep STA trying
+    // in the background (AP_STA) so it hops onto the hotspot the moment it's up.
+    Serial.println("WiFi not up yet -> SoftAP fallback (still retrying hotspot)");
+    WiFi.mode(WIFI_AP_STA);
     WiFi.softAP("HatOS", "hatos1234");
-    ip = WiFi.softAPIP();
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    IPAddress ip = WiFi.softAPIP();
     Serial.printf("SoftAP up: SSID=HatOS pass=hatos1234  http://%s/  ws://%s:81\n",
                   ip.toString().c_str(), ip.toString().c_str());
   }
+#else
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP("HatOS", "hatos1234");
+  IPAddress ip = WiFi.softAPIP();
+  Serial.printf("SoftAP up: SSID=HatOS pass=hatos1234  http://%s/  ws://%s:81\n",
+                ip.toString().c_str(), ip.toString().c_str());
+#endif
   ws.begin();
   ws.onEvent(onWsEvent);
   http.on("/", []() { http.send(200, "text/html", CONTROL_HTML); });
   http.onNotFound([]() { http.send(200, "text/html", CONTROL_HTML); });  // any path -> control page
   http.begin();
 }
-void netLoop() { ws.loop(); http.handleClient(); }
+
+void netLoop() {
+  ws.loop();
+  http.handleClient();
+#ifdef WIFI_SSID
+  bool up = (WiFi.status() == WL_CONNECTED);
+  if (up && !g_wasConnected) {            // just (re)connected
+    g_wasConnected = true;
+    wifiReport("WiFi reconnected:");
+  } else if (!up && g_wasConnected) {     // just dropped
+    g_wasConnected = false;
+    Serial.println("WiFi dropped -> reconnecting...");
+  }
+  if (!up && millis() - g_lastRetry > 8000) {   // keep retrying to join the hotspot
+    g_lastRetry = millis();
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+  }
+#endif
+}
 bool netIsConnected() { return WiFi.status() == WL_CONNECTED; }
 void netBroadcast(const char* json) { ws.broadcastTXT((char*)json); }
 void netBroadcastBin(const uint8_t* data, size_t len) { ws.broadcastBIN((uint8_t*)data, len); }
