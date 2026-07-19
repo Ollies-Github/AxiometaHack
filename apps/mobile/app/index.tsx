@@ -137,6 +137,14 @@ export default function HomeScreen() {
           })}
         </View>
 
+        <Link href="/market" asChild>
+          <Pressable accessibilityRole="button" style={styles.marketBtn}>
+            <MaterialCommunityIcons name="storefront-outline" size={20} color="#071008" />
+            <Text style={styles.marketText}>Browse the App Market</Text>
+            <MaterialCommunityIcons name="arrow-right" size={18} color="#071008" />
+          </Pressable>
+        </Link>
+
         <Text style={styles.demoNote}>
           The launcher mirrors the hat’s real apps. Turn the encoder on the hat to switch too —
           it stays in sync here.
@@ -182,5 +190,7 @@ const styles = StyleSheet.create({
   badgeText: { color: '#071008', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
   widgetName: { color: '#e9edf4', fontWeight: '800', fontSize: 15 },
   widgetBlurb: { color: '#727c90', fontSize: 12 },
+  marketBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, minHeight: 52, borderRadius: 15, backgroundColor: '#ffce5c', marginTop: 2 },
+  marketText: { color: '#071008', fontSize: 15, fontWeight: '900' },
   demoNote: { color: '#667085', fontSize: 11, textAlign: 'center', lineHeight: 16, marginTop: 4 },
 });
